@@ -1,0 +1,15 @@
+# pihole
+pihole/list.*
+pihole/*.db
+<<<<<<< Updated upstream
+pihole/migration_backup/*
+=======
+>>>>>>> Stashed changes
+
+#klipper
+klipper/klipper-*
+
+#any
+*.bkp
+*old*
+*.bak

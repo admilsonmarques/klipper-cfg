@@ -1,0 +1,91 @@
+---
+services:
+
+  klipper:
+    container_name: klipper
+    image: klipper-dev
+    privileged: true
+    networks:
+      hunnet:
+        ipv4_address: 172.24.0.3
+    devices:
+      - '/dev/printa_skr3ez:/dev/printa_skr3ez'
+    volumes:
+      - '/dev/printa_skr3ez:/dev/printa_skr3ez'
+      - './klipper/config:/opt/printer_data/config'
+      - '~/gcode:/opt/printer_data/gcodes'
+      - 'run:/opt/printer_data/run'
+      - 'log:/opt/printer_data/logs'
+      - 'shared-volume:/opt/klipper'
+    restart: always
+
+  moonraker:
+    container_name: moonraker
+    image: moonraker-dev
+    pid: host
+    depends_on:
+      klipper:
+        condition: service_started
+    networks:
+      hunnet:
+        ipv4_address: 172.24.0.4
+    ports:
+      - '7125:7125/tcp'
+    volumes:
+      - './klipper/config:/opt/printer_data/config'
+      - '~/gcode:/opt/printer_data/gcodes'
+      - 'shared-volume:/opt/klipper'
+      - '/run/dbus:/run/dbus'
+      - '/run/systemd:/run/systemd'
+      - 'run:/opt/printer_data/run'
+      - 'log:/opt/printer_data/logs'
+      - 'moonraker-db:/opt/printer_data/database'
+    restart: always
+
+  fluidd:
+    container_name: fluidd
+    image: cadriel/fluidd:latest
+    networks:
+      hunnet:
+        ipv4_address: 172.24.0.6
+    ports:
+      - '81:80/tcp'
+    volumes:
+      - './nginx:/etc/nginx'
+      - './klipper:/etc/klipper'
+    restart: unless-stopped
+
+  ustreamer:
+    container_name: webcam
+    image: mkuf/ustreamer:latest
+    entrypoint: [ "/opt/ustreamer/ustreamer", "--host=0.0.0.0", "--port=8080", "--format=uyvy", "--workers=10", "--resolution=1280x720", "--persistent"]
+    networks:
+      hunnet:
+        ipv4_address: 172.24.0.7
+    ports:
+      - '8090:8080/tcp'
+    devices:
+      - /dev/webcam_c270:/dev/video0
+    restart: always
+
+networks:
+  hunnet:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.24.0.0/16
+          gateway: 172.24.0.1
+
+volumes:
+  shared-volume:
+    driver: local
+  moonraker-db:
+  log:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+  run:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
