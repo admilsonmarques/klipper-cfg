@@ -6,6 +6,6 @@ secrets_origin="$HOME/.secrets/moonraker.secrets"
 secrets_dest="$dest_folder/moonraker.secrets"
 echo "creating symlink ${git_folder} -> ${dest_folder}"
 ln -sfn "${git_folder}" "${dest_folder}"
-echo "creating symlink fro secrets"
+echo "creating symlink for secrets"
 ln -sfn "${secrets_origin}" "${secrets_dest}"
 
