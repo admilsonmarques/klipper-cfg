@@ -13,3 +13,4 @@ klipper/klipper-*
 *.bkp
 *old*
 *.bak
+/klipper/moonraker.realsecrets
