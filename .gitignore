@@ -9,6 +9,9 @@ pihole/migration_backup/*
 #klipper
 klipper/klipper-*
 
+#klippain shaker
+../*K-ShakeTune*
+
 #any
 *.bkp
 *old*
