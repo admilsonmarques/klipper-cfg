@@ -12,6 +12,9 @@ klipper/klipper-*
 #klippain shaker
 **/K-ShakeTune*
 
+# timelapse
+**/timelapse*
+
 #any
 *.bkp
 *old*
