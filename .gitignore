@@ -20,3 +20,7 @@ klipper/klipper-*
 *old*
 *.bak
 /klipper/moonraker.realsecrets
+
+
+#themes
+**/.theme/*
