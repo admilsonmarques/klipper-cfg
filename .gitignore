@@ -1,19 +1,11 @@
 # pihole
 pihole/list.*
 pihole/*.db
-<<<<<<< Updated upstream
 pihole/migration_backup/*
-=======
->>>>>>> Stashed changes
 
 #klipper
 klipper/klipper-*
 
-#klippain shaker
-**/K-ShakeTune*
-
-# timelapse
-**/timelapse*
 
 #any
 *.bkp
