@@ -7,10 +7,10 @@ pihole/migration_backup/*
 klipper/klipper-*
 
 #klippain
-klipper/voron/config/*
-klipper/voron/moonraker/*
-klipper/voron/macros/*
-klipper/voron/scripts/*
+/klipper/voron/config/*
+/klipper/voron/moonraker/*
+/klipper/voron/macros/*
+/klipper/voron/scripts/*
 
 
 #any
