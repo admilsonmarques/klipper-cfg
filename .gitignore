@@ -11,7 +11,7 @@ klipper/klipper-*
 /klipper/voron/moonraker
 /klipper/voron/macros
 /klipper/voron/scripts
-
+/klipper/voron/ShakeTune_results
 
 #any
 *.bkp
