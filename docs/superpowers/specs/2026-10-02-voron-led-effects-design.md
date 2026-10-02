@@ -54,11 +54,15 @@ Sub-states (`cl_homing`, `cl_leveling`, `cl_meshing`, `cl_calibrating_z`, `cl_cl
 
 - Remove the `SET_LED_EFFECT EFFECT=caselight_idle` line. Keep the M118/M117 warnings.
 
+### Cleanup of dead effects
+
+- Delete `caselight_idle`, `caselight_printing`, `caselight_busy` and the commented `cl_printing` progress-bar block from overrides.cfg. `caselight_idle` has `autostart: true` and would otherwise auto-start at boot and have its frames summed with the active effect until klippain's `STATUS_LEDS` replaces it. Deleting the effect makes the removal of the `SET_LED_EFFECT EFFECT=caselight_idle` line in `[idle_timeout]` mandatory — both edits must land together.
+
 ### Filter
 
 - No changes. 10-min post-print run is already implemented by klippain (`end_print`/`cancel_print` → `_STOP_FILTER_DELAYED`).
 
-## Concrete config (overrides.cfg, caselight section)
+## Concrete config (overrides.cfg)
 
 ```ini
 # Caselight: 2x25 LED strips in series = 50 LEDs
@@ -88,17 +92,19 @@ autostart: false
 frame_rate: 24
 heater: heater_bed
 layers:
-    temperature_gauge 0 110 add (1.0, 0.25, 0.0),(0.9, 0.05, 0.0)
+    temperaturegauge 0 110 add (1.0, 0.25, 0.0),(0.9, 0.05, 0.0)
     breathing 4 0.3 add (0.35, 0.0, 0.0)
 
+# Layer order matters: the first line is the topmost layer. The static
+# base must be listed last, otherwise it wipes the progress bar.
 [led_effect cl_printing]
 leds:
     neopixel:caselight
 autostart: false
 frame_rate: 24
 layers:
-    static 0 0 top (0.05, 0.05, 0.07)
     progress -1 0 add (1.0, 1.0, 1.0),(0.0, 0.1, 0.4)
+    static 0 0 top (0.05, 0.05, 0.07)
 
 [led_effect cl_done_printing]
 leds:
@@ -158,12 +164,15 @@ layers:
 1. Klipper restart loads cleanly (no config errors).
 2. `SET_LED_EFFECT EFFECT=cl_printing` + simulate progress: bar spans the full 50-LED strip.
 3. `STATUS_LEDS COLOR=off`: all 50 LEDs dark.
-4. End a print: all LEDs off; after 1 h idle they stay off.
+4. End a print: all LEDs off; set `SET_IDLE_TIMEOUT TIMEOUT=10` to verify they stay off after the timeout fires (instead of waiting 1 h).
 5. Filter still runs 10 min post-print (`variable_filter_default_time_on_end_print: 600`).
 6. Heating: gauge fills toward 110 °C as bed heats.
+7. No second effect is left enabled on the caselight (the plugin sums overlapping effects — a leftover autostart effect would show light even when "off").
 
 ## Gotchas
 
 - Plugin LED indices are 1-based in config (`(1)` = first physical LED).
-- Klipper merges duplicate sections; `overrides.cfg` is included last, so its options win.
+- Klipper merges duplicate sections; `overrides.cfg` is included last, so its options win. Options not redeclared (e.g. `run_on_error: true` on `critical_error`) are retained from klippain's definition.
+- Layer keywords are derived from the class name with no underscores: it is `temperaturegauge`, not `temperature_gauge` — a wrong keyword aborts Klipper startup.
+- Layers are applied bottom-up: the **first** line in `layers:` is the topmost. A `top`-blend static base must be the **last** line or it wipes the layers above it.
 - `progress` layer reads `display_status.progress` — works with Mainsail/Fluidd uploads.
