@@ -12,12 +12,14 @@
 
 ---
 
-### Task 1: Replace the caselight LED block
+### Task 1: Apply both overrides.cfg edits (effects block + idle_timeout)
 
 **Files:**
-- Modify: `klipper/voron/overrides.cfg:172-209` (LED block: dead effects + commented progress bar)
+- Modify: `klipper/voron/overrides.cfg` (LED block at lines 173–209, `[idle_timeout]` gcode last line)
 
-- [ ] **Step 1: Replace lines 172–209 with the new effect definitions**
+Note: the spec requires the effect deletion and the `SET_LED_EFFECT EFFECT=caselight_idle` removal to land together — both edits go into a single commit.
+
+- [ ] **Step 1: Replace the LED block (lines 173–209) with the new effect definitions**
 
 Edit `klipper/voron/overrides.cfg`, old_string (exact, includes the commented block and its trailing line):
 
@@ -156,24 +158,7 @@ layers:
     static 1 0 top (1.0, 0.0, 0.0)
 ```
 
-- [ ] **Step 2: Static check — section names are unique inside overrides.cfg**
-
-Run: `grep -n "^\[neopixel\|^\[led_effect" klipper/voron/overrides.cfg`
-Expected: each section name appears exactly once; the list is `neopixel caselight`, `cl_standby`, `cl_busy`, `cl_heating`, `cl_printing`, `cl_done_printing`, `sb_logo_done_printing`, `sb_nozzle_done_printing`, `cl_off`, `critical_error`.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add klipper/voron/overrides.cfg
-git commit -m "voron: redesign caselight effects (50 LEDs, gauge, progress bar, off at print end)"
-```
-
-### Task 2: Remove the idle_timeout LED relight
-
-**Files:**
-- Modify: `klipper/voron/overrides.cfg` `[idle_timeout]` gcode (last line)
-
-- [ ] **Step 1: Delete the `SET_LED_EFFECT` line**
+- [ ] **Step 2: Delete the `SET_LED_EFFECT` line from `[idle_timeout]`**
 
 Edit `klipper/voron/overrides.cfg`, old_string:
 
@@ -192,19 +177,24 @@ new_string:
     {% endif %}
 ```
 
-- [ ] **Step 2: Static check — no dangling references**
+- [ ] **Step 3: Static check — section names are unique inside overrides.cfg**
 
-Run: `grep -rn "caselight_idle\|caselight_printing\|caselight_busy" klipper/`
-Expected: no results (the effect sections are gone and nothing references them).
+Run: `grep -n "^\[neopixel\|^\[led_effect" klipper/voron/overrides.cfg`
+Expected: each section name appears exactly once; the list is `neopixel caselight`, `cl_standby`, `cl_busy`, `cl_heating`, `cl_printing`, `cl_done_printing`, `sb_logo_done_printing`, `sb_nozzle_done_printing`, `cl_off`, `critical_error`.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Static check — no dangling references**
+
+Run: `grep -rn --exclude='*.bak' "caselight_idle\|caselight_printing\|caselight_busy" klipper/`
+Expected: no results (skip `overrides.cfg.bak`, which still contains the old names). If any real file matches, the edits are incomplete.
+
+- [ ] **Step 5: Commit both edits together**
 
 ```bash
 git add klipper/voron/overrides.cfg
-git commit -m "voron: idle_timeout no longer relights LEDs"
+git commit -m "voron: redesign caselight effects (50 LEDs, gauge, progress bar, off at print end, no idle relight)"
 ```
 
-### Task 3: Final consistency check + printer verification
+### Task 2: Final consistency check + printer verification
 
 **Files:**
 - Read: `klipper/voron/overrides.cfg` (LED block + idle_timeout)
@@ -212,7 +202,7 @@ git commit -m "voron: idle_timeout no longer relights LEDs"
 - [ ] **Step 1: Diff the new block against the spec's concrete config**
 
 Run: extract the block from overrides.cfg and diff against `docs/superpowers/specs/2026-10-02-voron-led-effects-design.md` config block.
-Expected: identical except the added comments and the `# Caselight: 2x25...` header line.
+Expected: identical except for the added `## ... State ...` section comments and the `(klippain assumes 31)` suffix on the `# Caselight: 2x25...` header line. Do not "fix" those as drift.
 
 - [ ] **Step 2: Sanity review checklist**
 
