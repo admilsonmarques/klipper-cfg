@@ -19,7 +19,7 @@
 
 Note: the spec requires the effect deletion and the `SET_LED_EFFECT EFFECT=caselight_idle` removal to land together — both edits go into a single commit.
 
-- [ ] **Step 1: Replace the LED block (lines 173–209) with the new effect definitions**
+- [x] **Step 1: Replace the LED block (lines 173–209) with the new effect definitions**
 
 Edit `klipper/voron/overrides.cfg`, old_string (exact, includes the commented block and its trailing line):
 
@@ -158,7 +158,7 @@ layers:
     static 1 0 top (1.0, 0.0, 0.0)
 ```
 
-- [ ] **Step 2: Delete the `SET_LED_EFFECT` line from `[idle_timeout]`**
+- [x] **Step 2: Delete the `SET_LED_EFFECT` line from `[idle_timeout]`**
 
 Edit `klipper/voron/overrides.cfg`, old_string:
 
@@ -177,17 +177,17 @@ new_string:
     {% endif %}
 ```
 
-- [ ] **Step 3: Static check — section names are unique inside overrides.cfg**
+- [x] **Step 3: Static check — section names are unique inside overrides.cfg**
 
 Run: `grep -n "^\[neopixel\|^\[led_effect" klipper/voron/overrides.cfg`
 Expected: each section name appears exactly once; the list is `neopixel caselight`, `cl_standby`, `cl_busy`, `cl_heating`, `cl_printing`, `cl_done_printing`, `sb_logo_done_printing`, `sb_nozzle_done_printing`, `cl_off`, `critical_error`.
 
-- [ ] **Step 4: Static check — no dangling references**
+- [x] **Step 4: Static check — no dangling references**
 
 Run: `grep -rn --exclude='*.bak' "caselight_idle\|caselight_printing\|caselight_busy" klipper/`
 Expected: no results (skip `overrides.cfg.bak`, which still contains the old names). If any real file matches, the edits are incomplete.
 
-- [ ] **Step 5: Commit both edits together**
+- [x] **Step 5: Commit both edits together**
 
 ```bash
 git add klipper/voron/overrides.cfg
@@ -199,12 +199,12 @@ git commit -m "voron: redesign caselight effects (50 LEDs, gauge, progress bar, 
 **Files:**
 - Read: `klipper/voron/overrides.cfg` (LED block + idle_timeout)
 
-- [ ] **Step 1: Diff the new block against the spec's concrete config**
+- [x] **Step 1: Diff the new block against the spec's concrete config**
 
 Run: extract the block from overrides.cfg and diff against `docs/superpowers/specs/2026-10-02-voron-led-effects-design.md` config block.
 Expected: identical except for the added `## ... State ...` section comments and the `(klippain assumes 31)` suffix on the `# Caselight: 2x25...` header line. Do not "fix" those as drift.
 
-- [ ] **Step 2: Sanity review checklist**
+- [x] **Step 2: Sanity review checklist**
 
 Confirm each of these by reading the final file:
 1. `chain_count: 50` under `[neopixel caselight]`.
