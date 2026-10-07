@@ -85,11 +85,11 @@ Order matters: `CARTOGRAPHER_SCAN_CALIBRATE` / `CARTOGRAPHER_TOUCH_CALIBRATE` ha
 
 **B. Sensorless tuning** (riskiest part — done with maximum sensitivity first):
 1. **Before any G28**: establish Z clearance by hand (the head starts at an unknown Z; Klippain z-hops only 5 mm and forces a full G28 when X/Y are unhomed). Keep the print bed away / nozzle visibly clear of the plate.
-2. With `driver_SGTHRS: 255`, arm the M112 protocol and run `G28`. **The first sensorless X/Y home IS the 255 test** — expect an early stop (false trigger). If the axis does not stop → `M112` immediately; fix jumpers/diag wiring. Wait ~2 s between attempts (stall flag clearing).
+2. With `driver_SGTHRS: 255`, arm the M112 protocol and run `G28 X Y` — the X/Y-only path (Klippain's override never touches Z here; a bare `G28` would fail: Z-scan homing needs a scan model, which only exists after C.1). **The first sensorless X/Y home IS the 255 test** — expect an early stop (false trigger). If the axis does not stop → `M112` immediately; fix jumpers/diag wiring. Wait ~2 s between attempts (stall flag clearing). Between attempts, return the carriage near the rail center by hand (M84 first) — Klippain's backoff move is only a few mm and the carriage drifts toward the endstop per attempt.
 3. Lower SGTHRS in steps until X travels fully to the physical limit → `max_sensitivity`.
-4. Keep lowering until a single clean stop, no banging → `min_sensitivity`.
+4. Keep lowering to find the **lowest** value that still gives a single clean stop without banging (contact gets harder as SGTHRS drops) → `min_sensitivity`.
 5. Final: `min + (max - min)/3`, rounded. Repeat for Y. Put final values in `overrides.cfg`.
-6. Note: Z-scan homing itself requires X/Y homed and the head over the bed — it cannot "lift the head" from an unhomed state.
+6. Note: Z-scan homing requires X/Y homed, the head over the bed, **and a loaded scan model** — the model only exists after C.1 + `SAVE_CONFIG`, so the first full `G28` belongs in D. It cannot "lift the head" from an unhomed state. If tuning proves unreliable or bangy at Klippain's `homing_speed: 40` (the Klipper doc suggests ~20 mm/s = rotation_distance/2 for these axes), lower `homing_speed` for `[stepper_x]`/`[stepper_y]` in overrides.cfg.
 
 **C. Cartographer calibration** (X/Y now homed):
 1. `CARTOGRAPHER_SCAN_CALIBRATE` (scan model; note: `CARTOGRAPHER_CALIBRATE` is a deprecated stub in the current plugin and prints a rename warning without calibrating) → `SAVE_CONFIG`.
