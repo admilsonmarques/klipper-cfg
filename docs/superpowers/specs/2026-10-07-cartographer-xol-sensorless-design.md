@@ -19,7 +19,7 @@ Config is Klippain-based; user files live in `klipper/voron/` (printer.cfg, mcu.
 1. **Klippain main now has native Cartographer support** — `config/hardware/probes/cartographer_touch.cfg` (the installed copy predates it; user already updated Klippain on the Pi).
    - Profile sets `probe_type_enabled: "cartographer_touch"`, `probe_contact_z_home_mode: "none"` (G28 Z uses scan-mode virtual endstop), `probe_contact_z_home_startprint_mode: "hook"` (START_PRINT runs `contact_z_home` → `_PROBE_HOOK_CONTACT_Z_HOME` → `CARTOGRAPHER_TOUCH_HOME` after QGL, before bed mesh). Contact temperature guard active.
    - Ship default `[cartographer] y_offset: 15` is a placeholder; real value must be set by user.
-2. **Cartographer v4 plugin** (`Cartographer3D/cartographer3d-plugin`) registers the `probe` printer object (`register_as_probe: True`) — any leftover `[probe]` section conflicts ("Can't register 'probe' as invalid name"). The TAP `[probe]` in overrides.cfg **must be removed**, along with its `z_offset: -0.852`.
+2. **Cartographer v4 plugin** (`Cartographer3D/cartographer3d-plugin`) registers the `probe` printer object (`register_as_probe: True`, `add_object("probe", …)`); it never reads a `[probe]` config section. Any leftover `[probe]` section breaks startup: with the include order here (`[cartographer]` loads first) Klipper's config validation aborts with `Option '<key>' is not valid in section 'probe'` (unused-section check); the reversed order would raise `Printer object 'probe' already created`. **Both** `[probe]` sections must be removed: the TAP one in overrides.cfg (with its `z_offset: -0.852`) **and** the one in mcu.cfg (EBB remap block, `pin: ^toolhead:PROBE_INPUT`).
 3. **CAN bitrate**: bus is 500k (`system-cfg/can0`); Cartographer V4 ships at 1M. Must flash V4 with **CAN 500K** firmware before connecting to the bus (mixed bitrates kill the bus). The V4 exposes a working USB port; `cartographer_firmware/fw_update.sh` detects the device, and the Cartographer API returns the device UUID. Firmware 500K V4 images exist (combined Katapult+CAN and app-only).
 4. **Probe module length**: Armchair A4T README states *"A4T uses standard length probe modules for Xol-Carriage (even with UHF hotends in A4T)"*. The user printed `Carto_v4_Module_UHF.stl`; the standard `Carto_v4_Module.stl` is the documented choice. Physical acceptance criterion either way: coil **2.6–3.0 mm above the nozzle tip** (Cartographer docs). User will verify which module to use.
 5. **X/Y offset**: community values for Xol carriage + Cartographer vary (Klippain default 15; ~21.1 for Xol2/A4T in one reference config; 26.0 in another). Plan: start `x_offset: 0, y_offset: 21.1` and **verify physically** after install.
@@ -30,6 +30,7 @@ Config is Klippain-based; user files live in `klipper/voron/` (printer.cfg, mcu.
    - Klippain homing_override reduces run_current to `sensorless_current_factor` (75%) during sensorless homing — gentler stall contact.
    - Klippain TMC2209 axis templates already set `stealthchop_threshold: 0` (required for stallGuard).
    - Klippain `mcu.cfg` currently overrides `[stepper_x] endstop_pin: ^toolhead:X_STOP` (the file's own comment: "Uncomment … if not using sensorless homing"). Since mcu.cfg is included **after** the sensorless file, it would override `tmc2209_stepper_x:virtual_endstop` and break X homing. Must be removed/commented.
+   - Klipper's sensorless prerequisite `homing_retract_dist: 0` is already satisfied by Klippain (axis default-speed templates, and `cartographer_touch.cfg` for Z) — no extra change needed.
 
 ## Requirements
 
@@ -51,7 +52,7 @@ Klippain-native integration: swap the probe include, add `[mcu cartographer]`, o
 2. **Carriage**: install Xol carriage + A4T toolhead; remove the TAP mechanism. Watch the A4T README warnings (slimmer idlers / XY-joint clearance for build-plate area).
 3. **DIAG jumpers**: install on Manta M8P v2 slots M1 (X) and M2 (Y). Without them the stall is never detected.
 4. **Cartographer wiring**: CAN H/L spliced into the toolhead CAN line (Y-split at the EBB end) + 24V/GND from the EBB; route through the carriage cable channel.
-5. **Firmware**: flash V4 with CAN 500K via USB **before** connecting it to the bus. Get the UUID (Cartographer API or `canbus_query.py can0` after flash).
+5. **Firmware**: flash V4 with CAN 500K via USB **before** connecting it to the bus. Pin the version: the newest V4 image with a 500K variant is **6.1.0** (the 6.2.0 set is 1M/USB only); `fw_update.sh` filters `firmware_list.csv` by probe/link/speed and resolves to 6.1.0 — do not manually pick "latest". Get the UUID (Cartographer API or `canbus_query.py can0` after flash).
 
 ### Config changes (repo)
 
@@ -60,6 +61,7 @@ Klippain-native integration: swap the probe include, add `[mcu cartographer]`, o
    - Line 251: uncomment `[include config/software/sensorless_homing/sensorless_TMC2209.cfg]`
 2. **`klipper/voron/mcu.cfg`**
    - Remove/comment the `[stepper_x] endstop_pin: ^toolhead:X_STOP` block (lines 163–166) — must not override the sensorless virtual endstop.
+   - Remove/comment the `[probe]` block (lines 154–156, EBB remap: `pin: ^toolhead:PROBE_INPUT`) — leftover `[probe]` conflicts with the plugin's registered `probe` object.
    - Add `[mcu cartographer]` section with `canbus_uuid: <uuid>`.
 3. **`klipper/voron/overrides.cfg`**
    - Remove the `[probe]` section (TAP pin + `z_offset: -0.852`) — conflicts with the plugin's registered `probe` object.
@@ -78,7 +80,7 @@ Klippain-native integration: swap the probe include, add `[mcu cartographer]`, o
 **A. Cartographer bring-up** (before any homing):
 1. `CARTOGRAPHER_QUERY` responds; streamed distance changes as Z moves.
 2. Verify coil height (2.6–3.0 mm) and XY offset (marked-point method on the bed).
-3. `CARTOGRAPHER_CALIBRATE` (scan model, per docs) → `SAVE_CONFIG`.
+3. `CARTOGRAPHER_SCAN_CALIBRATE` (scan model, per docs; note: `CARTOGRAPHER_CALIBRATE` is a deprecated stub in the current plugin and prints a rename warning without calibrating) → `SAVE_CONFIG`.
 4. `CARTOGRAPHER_TOUCH_CALIBRATE` (nozzle touch at center) → `SAVE_CONFIG`.
 
 **B. Sensorless tuning** (riskiest part — done with maximum sensitivity first):
