@@ -19,7 +19,15 @@
 **Files:**
 - Modify: `klipper/voron/moonraker.conf` (add update_manager entries at the end)
 
-- [ ] **Step 1.1: Install the plugin into klippy-env**
+- [ ] **Step 1.1: Pre-flight — confirm the Klippain clone has Cartographer support**
+
+```bash
+ls ~/printer_data/config/config/hardware/probes/cartographer_touch.cfg
+```
+
+Expected: file exists (the whole plan hinges on this include resolving). If missing, `cd` to the klippain clone and `git pull` (user already updated it).
+
+- [ ] **Step 1.2: Install the plugin into klippy-env**
 
 On the Pi (SSH):
 
@@ -29,15 +37,16 @@ curl -s -L https://raw.githubusercontent.com/Cartographer3D/cartographer3d-plugi
 
 Expected: script completes without errors; `~/klippy-env/bin/pip show cartographer3d-plugin` prints a version (1.9.x+).
 
-- [ ] **Step 1.2: Clone the firmware repo (flash helper + update_manager target)**
+- [ ] **Step 1.3: Clone the firmware + katapult repos (flash tools)**
 
 ```bash
 cd ~ && git clone https://github.com/Cartographer3D/cartographer_firmware.git
+cd ~ && git clone https://github.com/Arksine/katapult
 ```
 
-Expected: `~/cartographer_firmware/fw_update.sh` exists.
+Expected: `~/cartographer_firmware/fw_update.sh` and `~/katapult/scripts/flashtool.py` exist.
 
-- [ ] **Step 1.3: Add moonraker update_manager entries**
+- [ ] **Step 1.4: Add moonraker update_manager entries**
 
 Edit `klipper/voron/moonraker.conf` — append at the end:
 
@@ -45,7 +54,7 @@ Edit `klipper/voron/moonraker.conf` — append at the end:
 [update_manager cartographer_plugin]
 type: python
 channel: stable
-package: cartographer3d-plugin
+project_name: cartographer3d-plugin
 virtualenv: ~/klippy-env
 managed_services: klipper
 
@@ -57,7 +66,9 @@ primary_branch: main
 managed_services: klipper
 ```
 
-- [ ] **Step 1.4: Commit + deploy**
+(Note: the key is `project_name:` — moonraker has no `package:` option; with the wrong key the updater row never appears.)
+
+- [ ] **Step 1.5: Commit + deploy**
 
 ```bash
 git add klipper/voron/moonraker.conf
@@ -66,40 +77,46 @@ git push
 ```
 
 On the Pi: `cd ~/klipper-cfg && git pull && sudo systemctl restart moonraker`
-Expected: moonraker restarts clean (Mainsail Machine tab shows the two new entries). If moonraker refuses to start, check the entry against the current Cartographer docs page and fix.
+Expected: moonraker restarts clean (Mainsail Machine tab shows the two new entries).
 
 ---
 
 ### Task 2: Bench flash — V4 to CAN 500K firmware 6.1.0
 
-No bus connection yet. Probe in hand, USB cable to the Pi.
+No bus connection yet. Probe in hand, USB cable to the Pi. **Do not use `fw_update.sh` here** — it detects the probe only from config (`[mcu cartographer]`), which doesn't exist until Task 4, and would skip flashing. Flash by explicit path instead.
 
-- [ ] **Step 2.1: Run the guided flash helper**
-
-```bash
-cd ~/cartographer_firmware && ./fw_update.sh
-```
-
-Guided flow (interactive, press Enter through the prompts):
-1. Welcome → Enter
-2. Probe detection (finds the V4 via USB: `/dev/serial/by-id/usb-Cartographer_stm32g431xx_*`)
-3. Protocol set to CAN; CAN speed detected as **500000** (from Moonraker's MCU frequency — the existing bus)
-4. Firmware recommendation: **6.1.0** for v4 + CAN + 500K (the script filters `firmware_list.csv`; 6.2.0 has no 500K image — do NOT override the recommendation)
-5. Confirm and flash (uses Klipper's `flash_can.py` via katapult/DFU)
-
-Expected: "Flashing" completes with status 0; the script thanks you.
-
-- [ ] **Step 2.2: Record the device UUID**
-
-The script queries `api.cartographer3d.com/q/uuid` during detection and prints the UUID. If missed, retrieve it now:
+- [ ] **Step 2.1: Get the device UUID from the API**
 
 ```bash
-curl -s "https://api.cartographer3d.com/q/uuid" -H "Content-Type: application/json" -d '{"device_name":"usb-Cartographer_stm32g431xx_XXXX"}'
+DEVICE_NAME=$(basename "$(ls /dev/serial/by-id/usb-Cartographer_stm32g431xx_* | head -n1)")
+curl -s "https://api.cartographer3d.com/q/device_name/$DEVICE_NAME" | jq -r '.device_uuid'
 ```
 
-Write the UUID down — it goes into `mcu.cfg` in Task 4. (Fallback: `canbus_query.py can0` after the probe is on the bus in Task 3.)
+Expected: a UUID like `4c9911db8a41` (12 hex chars). Write it down — it goes into `mcu.cfg` (Task 4) and the CAN flash (Task 3).
 
-Expected: a UUID like `4c9911db8a41` (12 hex chars).
+- [ ] **Step 2.2: Enter the bootloader and flash the katapult-deployer (500K)**
+
+```bash
+cd ~/klipper/scripts
+~/klippy-env/bin/python -c "import flash_usb as u; u.enter_bootloader('/dev/serial/by-id/$DEVICE_NAME')"
+sleep 3
+KATAPULT_DEVICE=$(ls /dev/serial/by-id/ | grep -i katapult | head -n1)   # e.g. usb-katapult_stm32g431xx_XXX
+cd ~/cartographer_firmware/firmware/v4/katapult-deployer/
+~/klippy-env/bin/python ~/katapult/scripts/flashtool.py -f katapult_deployer_v4_CAN_500K.bin -d "/dev/serial/by-id/$KATAPULT_DEVICE"
+```
+
+Expected: flashtool reports success. The probe is now a Katapult CAN bootloader node at **500K** — ready to be wired to the bus. Unplug USB.
+
+- [ ] **Step 2.3: Fallback (only if the probe never appears on USB)**
+
+If `/dev/serial/by-id/usb-Cartographer_*` does not exist (factory-CAN firmware without USB serial): use the DFU "pliers" method — connect USB while holding the boot button, then:
+
+```bash
+cd ~/cartographer_firmware/firmware/v4/combined-firmware/6.1.0/
+dfu-util -a 0 -D Katapult_plus_CartographerV4_6.1.0_CAN_500K.bin
+```
+
+Expected: dfu-util success; the probe now has both katapult and app at 500K — skip the CAN flash in Task 3, get the UUID from `canbus_query.py can0` after wiring.
 
 ---
 
@@ -122,6 +139,18 @@ Install the DIAG jumpers for slots **M1** (X motor) and **M2** (Y motor). M1 DIA
 - [ ] **Step 3.4: Wire the Cartographer**
 
 CAN H/L spliced into the toolhead CAN line (Y-split at the EBB end), 24V/GND from the EBB, cable routed through the carriage cable channel. Physical X/Y endstop switches stay unplugged-safe (their config pins go away in Task 4). Verify coil height (2.6–3.0 mm) and measure coil-to-nozzle X/Y with calipers (compare against `x_offset: 0, y_offset: 21.1` later).
+
+- [ ] **Step 3.5: Flash the app firmware over CAN (500K)**
+
+The probe is now a Katapult node on the bus (deployer from Step 2.2). Verify it's visible, then flash the 6.1.0 app:
+
+```bash
+~/klippy-env/bin/python ~/klipper/scripts/canbus_query.py can0   # shows a katapult node with your UUID
+cd ~/cartographer_firmware/firmware/v4/firmware/6.1.0/
+~/klippy-env/bin/python ~/katapult/scripts/flashtool.py -i can0 -f CartographerV4_6.1.0_CAN_500K_full_8kib_offset.bin -u <UUID>
+```
+
+Expected: flashtool success; `canbus_query.py can0` now shows "Cartographer V4" at 500K. (If Step 2.3's DFU path was used, skip this step.)
 
 ---
 
@@ -213,7 +242,7 @@ new_string:
 
 - [ ] **Step 4.6: mcu.cfg — add [mcu cartographer]**
 
-Append at the end of the file (replace `<UUID>` with the UUID from Step 2.2):
+Append at the end of the file (replace `<UUID>` with the UUID from Step 2.1):
 
 ```
 #--------------------------------------------#
@@ -383,6 +412,11 @@ Heat the bed to 100 °C (ABS printing temperature — the model is temperature-s
 ```
 G28 X Y
 CARTOGRAPHER_SCAN_CALIBRATE
+```
+
+The macro defaults to `method = manual`: it prompts for a low Z position — jog the nozzle to ~0.1 mm above the bed (paper test), then send `ACCEPT`. (Alternative: `CARTOGRAPHER_SCAN_CALIBRATE METHOD=touch`.) Then:
+
+```
 SAVE_CONFIG
 ```
 
@@ -433,7 +467,11 @@ Print a first-layer test (ABS, current slicer parameters). Babystep if needed; i
 
 Standard test print. Verify: START_PRINT sequence (soak → QGL → `contact_z_home` touch → adaptive mesh) runs clean, no skipped steps, first layer even, no homing errors at speed.
 
-- [ ] **Step 7.4: Final commit**
+- [ ] **Step 7.4: Input shaper re-check**
+
+The toolhead mass changed (TAP removed, Xol carriage) — the existing input-shaper values are stale. Run `SHAPER_CALIBRATE` with the mounted ADXL345 and apply the new values.
+
+- [ ] **Step 7.5: Final commit**
 
 Commit any remaining SAVE_CONFIG changes and the plan's completion:
 
@@ -455,6 +493,6 @@ Then update `docs/superpowers/plans/2026-10-07-cartographer-xol-sensorless.md` c
 | "Must home x and y before calibration" | Calibration before X/Y homed | `G28 X Y` first (Task 6) |
 | "Scan model not loaded" on G28 Z | Scan model missing | Run Step 6.1 + SAVE_CONFIG before full G28 |
 | `Option '<key>' is not valid in section 'probe'` at startup | Leftover `[probe]` section | Remove all `[probe]` blocks (mcu.cfg, overrides.cfg) |
-| klipper can't find cartographer MCU | Probe not on bus / wrong bitrate | Verify flash was 500K (Step 2.1); `canbus_query.py can0` |
+| klipper can't find cartographer MCU | Probe not on bus / wrong bitrate | Verify deployer+app flash were 500K (Steps 2.2/3.5); `canbus_query.py can0` |
 | Bangy sensorless homing | homing_speed too high | Lower `homing_speed` for stepper_x/y in overrides.cfg |
 | CARTOGRAPHER_CALIBRATE prints rename warning | Old macro name | Use CARTOGRAPHER_SCAN_CALIBRATE |
