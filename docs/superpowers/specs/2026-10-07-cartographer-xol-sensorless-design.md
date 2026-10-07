@@ -77,23 +77,29 @@ Klippain-native integration: swap the probe include, add `[mcu cartographer]`, o
 
 ### Calibration & test sequence
 
-**A. Cartographer bring-up** (before any homing):
-1. `CARTOGRAPHER_QUERY` responds; streamed distance changes as Z moves.
-2. Verify coil height (2.6–3.0 mm) and XY offset (marked-point method on the bed).
-3. `CARTOGRAPHER_SCAN_CALIBRATE` (scan model, per docs; note: `CARTOGRAPHER_CALIBRATE` is a deprecated stub in the current plugin and prints a rename warning without calibrating) → `SAVE_CONFIG`.
-4. `CARTOGRAPHER_TOUCH_CALIBRATE` (nozzle touch at center) → `SAVE_CONFIG`.
+Order matters: `CARTOGRAPHER_SCAN_CALIBRATE` / `CARTOGRAPHER_TOUCH_CALIBRATE` hard-fail unless X/Y are homed ("Must home x and y before calibration"), and X/Y can only be homed through the sensorless path. Sequence: motion-free checks → sensorless tuning → cartographer calibration → validation.
+
+**A. Motion-free bring-up** (no homing needed):
+1. Power on; `CARTOGRAPHER_QUERY` responds; streamed distance changes when the head is moved by hand (motors off).
+2. Physical checks: coil height 2.6–3.0 mm above nozzle tip; static XY offset measurement (coil center to nozzle, calipers) — refine later with the marked-point method once homing works.
 
 **B. Sensorless tuning** (riskiest part — done with maximum sensitivity first):
-1. `G28 Z` (scan home) to lift the head; carriage mid-rail.
-2. With `driver_SGTHRS: 255`: `G28 X`. The axis **must** stop early (false trigger). If it does not stop → `M112` immediately; fix jumpers/diag wiring. Wait ~2 s between attempts (stall flag clearing).
+1. **Before any G28**: establish Z clearance by hand (the head starts at an unknown Z; Klippain z-hops only 5 mm and forces a full G28 when X/Y are unhomed). Keep the print bed away / nozzle visibly clear of the plate.
+2. With `driver_SGTHRS: 255`, arm the M112 protocol and run `G28`. **The first sensorless X/Y home IS the 255 test** — expect an early stop (false trigger). If the axis does not stop → `M112` immediately; fix jumpers/diag wiring. Wait ~2 s between attempts (stall flag clearing).
 3. Lower SGTHRS in steps until X travels fully to the physical limit → `max_sensitivity`.
 4. Keep lowering until a single clean stop, no banging → `min_sensitivity`.
 5. Final: `min + (max - min)/3`, rounded. Repeat for Y. Put final values in `overrides.cfg`.
+6. Note: Z-scan homing itself requires X/Y homed and the head over the bed — it cannot "lift the head" from an unhomed state.
 
-**C. Validation**:
+**C. Cartographer calibration** (X/Y now homed):
+1. `CARTOGRAPHER_SCAN_CALIBRATE` (scan model; note: `CARTOGRAPHER_CALIBRATE` is a deprecated stub in the current plugin and prints a rename warning without calibrating) → `SAVE_CONFIG`.
+2. `CARTOGRAPHER_TOUCH_CALIBRATE` (nozzle touch at center) → `SAVE_CONFIG`.
+3. Verify XY offset with the marked-point method; adjust `x_offset`/`y_offset` in overrides.cfg if needed.
+
+**D. Validation**:
 1. Full G28 (X, Y sensorless; Z scan), QGL, bed mesh (9×9, saved config unchanged).
 2. First-layer print (ABS, current parameters) + babystep → adjust z_offset (touch model) if needed.
-3. Full test print; verify KAMP adaptive mesh still behaves.
+3. Full test print; verify Klippain's adaptive bed mesh (its own `adaptive_bed_mesh.cfg`, included by `bed_mesh_350mm.cfg` — there is no KAMP install in this repo) still behaves.
 
 ### Risks
 
