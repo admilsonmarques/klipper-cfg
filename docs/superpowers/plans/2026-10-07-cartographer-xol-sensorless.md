@@ -19,13 +19,14 @@
 **Files:**
 - Modify: `klipper/voron/moonraker.conf` (add update_manager entries at the end)
 
-- [ ] **Step 1.1: Pre-flight — confirm the Klippain clone has Cartographer support**
+- [ ] **Step 1.1: Pre-flight — confirm the Klippain clone has Cartographer support + the deployment mapping**
 
 ```bash
 ls ~/printer_data/config/config/hardware/probes/cartographer_touch.cfg
+ls -la ~/printer_data/config/printer.cfg
 ```
 
-Expected: file exists (the whole plan hinges on this include resolving). If missing, `cd` to the klippain clone and `git pull` (user already updated it).
+Expected: the cartographer include file exists (the whole plan hinges on it); the `ls -la` shows whether printer.cfg is a symlink into `~/klipper-cfg` or a plain copy — Steps 4.11 and 6.3 assume `git pull` and SAVE_CONFIG land in the same file, so confirm this now and note which case applies. If the include file is missing, `cd` to the klippain clone and `git pull` (user already updated it).
 
 - [ ] **Step 1.2: Install the plugin into klippy-env**
 
@@ -92,15 +93,20 @@ DEVICE_NAME=$(basename "$(ls /dev/serial/by-id/usb-Cartographer_stm32g431xx_* | 
 curl -s "https://api.cartographer3d.com/q/device_name/$DEVICE_NAME" | jq -r '.device_uuid'
 ```
 
-Expected: a UUID like `4c9911db8a41` (12 hex chars). Write it down — it goes into `mcu.cfg` (Task 4) and the CAN flash (Task 3).
+Expected: a UUID like `4c9911db8a41` (12 hex chars). Write it down — it goes into `mcu.cfg` (Task 4) and the CAN flash (Task 3). If `jq` is missing on the Pi, the raw JSON also contains the UUID — read `device_uuid` from the output by eye (or `grep -o '"device_uuid"[^,]*'`).
 
 - [ ] **Step 2.2: Enter the bootloader and flash the katapult-deployer (500K)**
 
 ```bash
 cd ~/klipper/scripts
 ~/klippy-env/bin/python -c "import flash_usb as u; u.enter_bootloader('/dev/serial/by-id/$DEVICE_NAME')"
-sleep 3
-KATAPULT_DEVICE=$(ls /dev/serial/by-id/ | grep -i katapult | head -n1)   # e.g. usb-katapult_stm32g431xx_XXX
+KATAPULT_DEVICE=""
+for i in {1..15}; do
+    KATAPULT_DEVICE=$(ls /dev/serial/by-id/ 2>/dev/null | grep -i katapult | head -n1)
+    [[ -n "$KATAPULT_DEVICE" ]] && break
+    sleep 2
+done
+echo "Katapult device: $KATAPULT_DEVICE"   # if empty after ~30s: power-cycle the probe and retry from enter_bootloader
 cd ~/cartographer_firmware/firmware/v4/katapult-deployer/
 ~/klippy-env/bin/python ~/katapult/scripts/flashtool.py -f katapult_deployer_v4_CAN_500K.bin -d "/dev/serial/by-id/$KATAPULT_DEVICE"
 ```
@@ -109,14 +115,15 @@ Expected: flashtool reports success. The probe is now a Katapult CAN bootloader 
 
 - [ ] **Step 2.3: Fallback (only if the probe never appears on USB)**
 
-If `/dev/serial/by-id/usb-Cartographer_*` does not exist (factory-CAN firmware without USB serial): use the DFU "pliers" method — connect USB while holding the boot button, then:
+If `/dev/serial/by-id/usb-Cartographer_*` does not exist (factory-CAN firmware without USB serial): use the DFU method. The V4 has **no boot button** — bridge the **BT0 and 3V3 holes** with tweezers while plugging in USB, then confirm DFU mode:
 
 ```bash
+lsusb | grep 0483:df11   # expected: the STM32 in DFU mode
 cd ~/cartographer_firmware/firmware/v4/combined-firmware/6.1.0/
-dfu-util -a 0 -D Katapult_plus_CartographerV4_6.1.0_CAN_500K.bin
+sudo dfu-util -R -a 0 -s 0x08000000:leave -D Katapult_plus_CartographerV4_6.1.0_CAN_500K.bin -d 0483:df11
 ```
 
-Expected: dfu-util success; the probe now has both katapult and app at 500K — skip the CAN flash in Task 3, get the UUID from `canbus_query.py can0` after wiring.
+Expected: dfu-util success (the `:leave` reboots the probe); the probe now has both katapult and app at 500K — skip the CAN flash in Task 3, get the UUID from `canbus_query.py can0` after wiring.
 
 ---
 
