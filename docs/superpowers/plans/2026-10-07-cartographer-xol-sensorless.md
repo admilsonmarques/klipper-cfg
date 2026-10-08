@@ -159,6 +159,10 @@ cd ~/cartographer_firmware/firmware/v4/firmware/6.1.0/
 
 Expected: flashtool success; `canbus_query.py can0` now shows "Cartographer V4" at 500K. (If Step 2.3's DFU path was used, skip this step.)
 
+- [ ] **Step 3.6: Toolhead fan wiring (A4T)**
+
+No config change — existing pins already match the A4T layout: **2510 hotend fan → FAN1** (`toolhead:E_FAN`, `[heater_fan]`), **two 4010 blowers in parallel → FAN2** (`toolhead:PART_FAN`, `[fan]`). TH0 is a thermistor input — it cannot drive a fan. **EBB36 v1.2 fan ports output 24V (no voltage jumper): a 5V 2510 (the A4T-recommended Delta) must NOT go on FAN1 — use a 24V 2510 or a fixed 5V feed instead.**
+
 ---
 
 ### Task 4: Config changes — repo
