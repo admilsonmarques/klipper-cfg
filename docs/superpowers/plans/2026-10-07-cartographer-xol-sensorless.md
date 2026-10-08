@@ -145,7 +145,7 @@ Install the DIAG jumpers for slots **M1** (X motor) and **M2** (Y motor). M1 DIA
 
 - [ ] **Step 3.4: Wire the Cartographer**
 
-CAN H/L spliced into the toolhead CAN line (Y-split at the EBB end), 24V/GND from the EBB, cable routed through the carriage cable channel. Physical X/Y endstop switches stay unplugged-safe (their config pins go away in Task 4). Verify coil height (2.6–3.0 mm) and measure coil-to-nozzle X/Y with calipers (compare against `x_offset: 0, y_offset: 21.1` later).
+**5V only — never 24V (permanent damage).** Power: 5V + GND from the EBB's **probe port** (freed by the TAP removal). The EBB36/42 v1.2 probe port carries GND, 5V, 24V, PB8, PB9 — **verify the 5V/GND pin positions with a multimeter (or the v1.2-specific pinout diagram) before plugging; V1.0 diagrams differ from V1.1/V1.2**. CAN H/L spliced into the toolhead CAN line (Y-split at the EBB end), twisted pair. Physical X/Y endstop switches stay unplugged-safe (their config pins go away in Task 4). Verify coil height (2.6–3.0 mm) and measure coil-to-nozzle X/Y with calipers (compare against `x_offset: 0, y_offset: 21.1` later).
 
 - [ ] **Step 3.5: Flash the app firmware over CAN (500K)**
 

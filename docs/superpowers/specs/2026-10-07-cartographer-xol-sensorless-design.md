@@ -51,7 +51,7 @@ Klippain-native integration: swap the probe include, add `[mcu cartographer]`, o
 1. **Probe module**: user verifies printed `Carto_v4_Module_UHF.stl` vs reprint `Carto_v4_Module.stl` (standard, per A4T docs). Criterion: coil 2.6–3.0 mm above nozzle tip. If reprinting: ABS, Nevermore filter on.
 2. **Carriage**: install Xol carriage + A4T toolhead; remove the TAP mechanism. Watch the A4T README warnings (slimmer idlers / XY-joint clearance for build-plate area).
 3. **DIAG jumpers**: install on Manta M8P v2 slots M1 (X) and M2 (Y). Without them the stall is never detected.
-4. **Cartographer wiring**: CAN H/L spliced into the toolhead CAN line (Y-split at the EBB end) + 24V/GND from the EBB; route through the carriage cable channel.
+4. **Cartographer wiring**: **5V only — never 24V (permanent damage)**. Power: 5V + GND from the EBB's **probe port** (freed by the TAP removal; the EBB36/42 v1.2 probe port also carries 24V — verify pin positions with a multimeter / v1.2 pinout before plugging). CAN H/L spliced into the toolhead CAN line (Y-split at the EBB end), twisted pair; route through the carriage cable channel.
 5. **Firmware**: flash V4 with CAN 500K via USB **before** connecting it to the bus. Pin the version: the newest V4 image with a 500K variant is **6.1.0** (the 6.2.0 set is 1M/USB only); `fw_update.sh` filters `firmware_list.csv` by probe/link/speed and resolves to 6.1.0 — do not manually pick "latest". Get the UUID (Cartographer API or `canbus_query.py can0` after flash).
 
 ### Config changes (repo)
