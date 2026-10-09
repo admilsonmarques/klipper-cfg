@@ -20,6 +20,8 @@ klipper/klipper-*
 /klipper/moonraker.realsecrets
 
 
+.claude/*
+
 #themes
 **/.theme/*
 Session.vim
