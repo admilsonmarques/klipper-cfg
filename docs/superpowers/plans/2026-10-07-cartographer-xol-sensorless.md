@@ -507,3 +507,19 @@ Then update `docs/superpowers/plans/2026-10-07-cartographer-xol-sensorless.md` c
 | klipper can't find cartographer MCU | Probe not on bus / wrong bitrate | Verify deployer+app flash were 500K (Steps 2.2/3.5); `canbus_query.py can0` |
 | Bangy sensorless homing | homing_speed too high | Lower `homing_speed` for stepper_x/y in overrides.cfg |
 | CARTOGRAPHER_CALIBRATE prints rename warning | Old macro name | Use CARTOGRAPHER_SCAN_CALIBRATE |
+
+---
+
+## Project outcome (2026-10-10 — complete)
+
+The plan was executed with significant, deliberate deviations. Final working state:
+
+- **Bus unified at 1M** (not 500K as planned): can0, Manta (rebuilt 520MHz/25MHz crystal — the 400MHz in the repo menuconfig was stale), EBB, Cartographer.
+- **Cartographer firmware 6.2.0** (plan pinned 6.1.0@500K): after the bus moved to 1M, 6.2.0 became available and fixed the "Command request" MCU shutdowns (plugin 1.9.0 + old firmware mismatch).
+- **Sensorless homing**: SGTHRS 115 on X/Y — but the effective value must live in **TMC Autotune's `sg4_thrs`** (autotune overrides [tmc2209] driver_SGTHRS at startup with its own default 40).
+- **X position_endstop 342** (Xol carriage has +12mm physical travel vs stock).
+- **START_PRINT is scan-only**: `contact_z_home` removed from the actions list (klippain's startup validation requires at least one contact mode = "hook" when probe_hook_family is set — keeping startprint_mode "hook" satisfies it while the action never runs).
+- **Scan calibration**: redone with the bed at 100°C (reference_temperature = coil temp 65.54°C); G28 no longer touches the bed; z_offset = 0, first layer validated without babystep.
+- **Touch model**: threshold 1504, z_offset -0.11 (negative = nozzle higher, max 0) — kept for manual use only.
+- **Input shaper**: mzv 58.8 (X) / 42.4 (Y) — re-measured for the new toolhead mass.
+- **Known gotchas captured**: SHAPER_CALIBRATE bypasses klippain's TEST_RESONANCES override (needs `[resonance_tester] probe_points: 171,175,50`); fw_update.sh can't detect bus bitrate (never use it to pick firmware); Cartographer is 5V-only; canbus_query shows 0 nodes while klipper holds active connections (normal).
